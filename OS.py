@@ -474,8 +474,8 @@ class BankersGUI:
 
     def draw_rag(self, n, m, allocation, maximum, available, need):
         self.canvas.delete("all")
-        node_size = 60
-        spacing = 120
+        node_size = 80
+        spacing = 160
         canvas_width = max(800, m * 150 + 400)
         self.canvas.config(scrollregion=(0, 0, canvas_width, n * spacing + 100))
 
@@ -484,7 +484,7 @@ class BankersGUI:
 
         # Draw processes (left side)
         for i in range(n):
-            x, y = 100, 100 + i * spacing
+            x, y = 150, 150 + i * spacing
             self.canvas.create_oval(x, y, x + node_size, y + node_size,
                                     fill="#2196F3", outline="#1976D2", width=2)
             self.canvas.create_text(x + node_size / 2, y + node_size / 2,
@@ -494,7 +494,7 @@ class BankersGUI:
 
         # Draw resources (right side)
         for j in range(m):
-            x, y = 300, 100 + j * spacing 
+            x, y = 500, 150 + j * spacing 
             self.canvas.create_rectangle(x + 2, y + 2, x + node_size + 2, y + node_size + 2,
                                         fill="#666666", outline="")
             self.canvas.create_rectangle(x, y, x + node_size, y + node_size,
@@ -529,7 +529,7 @@ class BankersGUI:
         cx, cy = (x1 + x2) / 2, (y1 + y2) / 2 + offset
 
         # Draw curved edge
-        self.canvas.create_line(x1, y1, cx, cy, x2, y2, fill=color, width=2,
+        self.canvas.create_line(x1, y1, cx, cy, x2, y2, fill=color, width=3,
                                 arrow=tk.LAST, arrowshape=(12, 15, 6),
                                 smooth=True, splinesteps=12,
                                 dash=() if solid else (5, 3))  # Dashed for request edges
