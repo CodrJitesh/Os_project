@@ -483,7 +483,7 @@ class BankersGUI:
 
         # Draw resources (right side)
         for j in range(m):
-            x, y = 400 + j * 150, 100
+            x, y = 300, 100 + j * spacing 
             self.canvas.create_rectangle(x + 2, y + 2, x + node_size + 2, y + node_size + 2,
                                         fill="#666666", outline="")
             self.canvas.create_rectangle(x, y, x + node_size, y + node_size,
