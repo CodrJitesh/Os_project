@@ -1,395 +1,530 @@
 import tkinter as tk
-from tkinter import ttk, messagebox
-import networkx as nx
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from tkinter import ttk, messagebox, scrolledtext
+import math
 
-class ResourceAllocationSimulator:
+class BankersGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("Graphical Simulator for Resource Allocation")
-        self.root.geometry("1400x800")
-        self.root.configure(bg="#2c3e50")
-
-        self.processes = set()
-        self.resources = {}
-        self.edges = set()
-        self.deadlock_nodes = set()
-        self.deadlock_edges = set() 
-
-        heading_label = tk.Label(root, text="Graphical Simulator for Resource Allocation", font=("Arial", 18, "bold"),
-                                 fg="white", bg="#34495e", padx=10, pady=10)
-        heading_label.pack(fill=tk.X)
-
-        self.graph_frame = tk.Frame(root, bg="#ecf0f1", bd=2, relief=tk.RIDGE)
-        self.graph_frame.pack(side=tk.LEFT, padx=20, pady=20, fill=tk.BOTH, expand=True)
-
-        self.control_frame = tk.Frame(root, bg="#bdc3c7", bd=2, relief=tk.RIDGE)
-        self.control_frame.pack(side=tk.RIGHT, padx=20, pady=20, fill=tk.Y)
-
-        self.figure, self.ax = plt.subplots(figsize=(8, 6))  # Was (6, 5)
-        self.canvas = FigureCanvasTkAgg(self.figure, master=self.graph_frame)
-        self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)  # Expand canvas fully
-
-
-
-        self.create_controls()
-
-    def create_controls(self):
-        ttk.Label(self.control_frame, text="Process Name:", font=("Arial", 14, "bold"), background="#bdc3c7").grid(row=0, column=0, sticky="w", pady=5)
-        self.process_entry = ttk.Entry(self.control_frame, width=20)
-        self.process_entry.grid(row=0, column=1, pady=5, padx=5)
-
-        ttk.Label(self.control_frame, text="Resource Name:", font=("Arial", 14, "bold"), background="#bdc3c7").grid(row=1, column=0, sticky="w", pady=5)
-        self.resource_entry = ttk.Entry(self.control_frame, width=20)
-        self.resource_entry.grid(row=1, column=1, pady=5, padx=5)
-
-        ttk.Label(self.control_frame, text="Instances:", font=("Arial", 14, "bold"), background="#bdc3c7").grid(row=2, column=0, sticky="w", pady=5)
-        self.instance_entry = ttk.Entry(self.control_frame, width=10)
-        self.instance_entry.grid(row=2, column=1, pady=5, padx=5)
-        self.instance_entry.insert(0, "1")  # Default value
-
-        # Frame to Hold Process & Resource Details
-        self.details_frame = tk.Frame(root, bg="#ecf0f1", bd=2, relief=tk.RIDGE)
-        self.details_frame.pack(fill=tk.X, padx=20, pady=10)
-
-        # Processes List (Stacked First)
-        ttk.Label(self.details_frame, text="Processes:", font=("Arial", 12, "bold"), background="#ecf0f1").pack(anchor="w", padx=10, pady=(5, 0))
-        self.process_listbox = tk.Listbox(self.details_frame, height=5, width=80)
-        self.process_listbox.pack(fill=tk.X, padx=10, pady=5)
-
-        # Resources List (Stacked Below)
-        ttk.Label(self.details_frame, text="Resources (Instances):", font=("Arial", 12, "bold"), background="#ecf0f1").pack(anchor="w", padx=10, pady=(10, 0))
-        self.resource_listbox = tk.Listbox(self.details_frame, height=5, width=80)
-        self.resource_listbox.pack(fill=tk.X, padx=10, pady=5)
-
-
-        buttons = [
-            ("Add Process", self.add_process),
-            ("Add Resource", self.add_resource),
-            ("Request Resource", self.request_resource),
-            ("Allocate Resource", self.allocate_resource),
-            ("Detect Deadlock", self.detect_deadlock),
-            ("Reset Graph", self.reset_graph)
-        ]
-
-        for i, (text, command) in enumerate(buttons, start=2):
-            btn = ttk.Button(self.control_frame, text=text, command=command, style="TButton")
-            btn.grid(row=i + 2, column=0, columnspan=2, pady=10, padx=10, ipadx=10, ipady=5)
-        # Deadlock Example Buttons Section
+        self.root.title("Banker's Algorithm Visualizer")
+        self.style = ttk.Style()
+        self.configure_styles()
+        self.create_widgets()
+        self.test_cases = self.get_test_cases()
         
+    def configure_styles(self):
+        self.style.theme_create("bankers", parent="alt", settings={
+            "TFrame": {"configure": {"background": "#2E2E2E"}},
+            "TLabel": {"configure": {
+                "background": "#2E2E2E",
+                "foreground": "#FFFFFF",
+                "font": ("Segoe UI", 10)
+            }},
+            "TButton": {"configure": {
+                "font": ("Segoe UI", 10, "bold"),
+                "borderwidth": 1,
+                "relief": "flat",
+                "padding": 5
+            }, "map": {
+                "background": [("active", "#4A4A4A"), ("pressed", "#3A3A3A")],
+                "foreground": [("active", "white")]
+            }},
+            "TCombobox": {"configure": {
+                "fieldbackground": "#404040",
+                "background": "#404040",
+                "arrowcolor": "white"
+            }},
+            "TEntry": {"configure": {
+                "fieldbackground": "#404040",
+                "foreground": "white"
+            }},
+            "TNotebook": {"configure": {
+                "background": "#2E2E2E",
+                "borderwidth": 0
+            }},
+            "TNotebook.Tab": {
+                "configure": {
+                    "padding": [10, 5],
+                    "background": "#404040",
+                    "foreground": "white",
+                    "font": ("Segoe UI", 9, "bold")
+                },
+                "map": {
+                    "background": [("selected", "#505050")],
+                    "expand": [("selected", [1, 1, 1, 0])]
+                }
+            }
+        })
+        self.style.theme_use("bankers")
+
+    def create_widgets(self):
+        self.root.configure(background="#2E2E2E")
+        self.root.geometry("1200x800")
         
-        # Frame to Hold Deadlock Example Buttons (Placed Below Details)
-        self.example_frame = tk.Frame(root, bg="#ecf0f1", bd=2, relief=tk.RIDGE)
-        self.example_frame.pack(fill=tk.X, padx=20, pady=10)
-
-        ttk.Label(self.example_frame, text="Load Examples:", font=("Arial", 14, "bold"), background="#ecf0f1").pack(anchor="w", padx=10, pady=5)
-
-        example_buttons = [
-            ("Deadlock 1", self.load_deadlock_1),
-            ("Deadlock 2", self.load_deadlock_2),
-            ("Deadlock 3", self.load_deadlock_3),
-        ]
-
-        for text, command in example_buttons:
-            btn = ttk.Button(self.example_frame, text=text, command=command, style="TButton")
-            btn.pack(fill=tk.X, padx=10, pady=5)
-
-
-
-        self.style_buttons()
-
-    def load_deadlock_1(self):
-        self.reset_graph()
-    
-        # Processes & Resources
-        self.processes = {"P1", "P2"}
-        self.resources = {"R1": 1, "R2": 1}
+        # Main container
+        main_frame = ttk.Frame(self.root)
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
         
-        # Update Listboxes
-        self.process_listbox.delete(0, tk.END)
-        self.resource_listbox.delete(0, tk.END)
-        for p in self.processes:
-            self.process_listbox.insert(tk.END, p)
-        for r, i in self.resources.items():
-            self.resource_listbox.insert(tk.END, f"{r} ({i})")
+        # Left panel
+        left_panel = ttk.Frame(main_frame, width=400)
+        left_panel.pack(side=tk.LEFT, fill=tk.BOTH, expand=False)
         
-        # Requests & Allocations to Form Deadlock
-        self.edges = {("P1", "R1"), ("P2", "R2"), ("R1", "P2"), ("R2", "P1")}
+        # Right panel
+        right_panel = ttk.Frame(main_frame)
+        right_panel.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
         
-        self.update_graph()
-        messagebox.showinfo("Example Loaded", "Deadlock Example 1 Loaded!")
-
-    def load_deadlock_2(self):
-        self.reset_graph()
+        # ----------------- Left Panel Contents -----------------
+        # Test case section
+        test_case_frame = ttk.LabelFrame(left_panel, text=" Test Cases ", padding=10)
+        test_case_frame.pack(fill=tk.X, pady=5)
         
-        # Processes & Resources
-        self.processes = {"P1", "P2", "P3"}
-        self.resources = {"R1": 1, "R2": 1, "R3": 1}
+        self.test_case_var = tk.StringVar()
+        self.test_case_combobox = ttk.Combobox(test_case_frame, textvariable=self.test_case_var, 
+                                              values=[f"Test Case {i}" for i in range(1, 9)])
+        self.test_case_combobox.pack(fill=tk.X, pady=3)
+        ttk.Button(test_case_frame, text="Load Selected Case", command=self.load_test_case, 
+                  style="Accent.TButton").pack(fill=tk.X, pady=5)
         
-        # Update Listboxes
-        self.process_listbox.delete(0, tk.END)
-        self.resource_listbox.delete(0, tk.END)
-        for p in self.processes:
-            self.process_listbox.insert(tk.END, p)
-        for r, i in self.resources.items():
-            self.resource_listbox.insert(tk.END, f"{r} ({i})")
+        # System parameters
+        param_frame = ttk.LabelFrame(left_panel, text=" System Parameters ", padding=10)
+        param_frame.pack(fill=tk.X, pady=5)
         
-        # Requests & Allocations to Form Deadlock
-        self.edges = {("P1", "R1"), ("P2", "R2"), ("P3", "R3"), ("R1", "P2"), ("R2", "P3"), ("R3", "P1")}
+        input_grid = ttk.Frame(param_frame)
+        input_grid.pack(fill=tk.X)
         
-        self.update_graph()
-        messagebox.showinfo("Example Loaded", "Deadlock Example 2 Loaded!")
-
-    def load_deadlock_3(self):
-        self.reset_graph()
+        ttk.Label(input_grid, text="Processes:").grid(row=0, column=0, sticky=tk.W)
+        self.n_entry = ttk.Entry(input_grid, width=8)
+        self.n_entry.grid(row=0, column=1, padx=5, pady=2)
         
-        # Processes & Resources (Multiple Instances)
-        self.processes = {"P1", "P2", "P3", "P4"}
-        self.resources = {"R1": 2, "R2": 2, "R3": 1, "R4": 1}  # ✅ Multiple instances for R1 & R2
+        ttk.Label(input_grid, text="Resources:").grid(row=1, column=0, sticky=tk.W)
+        self.m_entry = ttk.Entry(input_grid, width=8)
+        self.m_entry.grid(row=1, column=1, padx=5, pady=2)
         
-        # Update Listboxes
-        self.process_listbox.delete(0, tk.END)
-        self.resource_listbox.delete(0, tk.END)
-        for p in self.processes:
-            self.process_listbox.insert(tk.END, p)
-        for r, i in self.resources.items():
-            self.resource_listbox.insert(tk.END, f"{r} ({i})")
+        ttk.Label(input_grid, text="Total Resources:").grid(row=2, column=0, sticky=tk.W)
+        self.total_resources_entry = ttk.Entry(input_grid)
+        self.total_resources_entry.grid(row=2, column=1, padx=5, pady=2, sticky=tk.EW)
         
-        # Requests & Allocations (Deadlock Formed)
-        self.edges = {("P1", "R1"), ("P2", "R2"), ("P3", "R3"), ("P4", "R4"),
-                    ("R1", "P2"), ("R2", "P3"), ("R3", "P4"), ("R4", "P1")}  # Circular wait
-
-        self.update_graph()
-        messagebox.showinfo("Example Loaded", "Deadlock Example 3 (Multiple Instances) Loaded!")
-
-
-    def style_buttons(self):
-        style = ttk.Style()
-        style.configure("TButton",
-                        font=("Arial", 12, "bold"),  # Bigger font
-                        padding=10,
-                        background="#3498db",  # Default blue color
-                        foreground="black",
-                        borderwidth=2)
-
-        style.map("TButton",
-                background=[("active", "#2980b9"), ("disabled", "#bdc3c7")],  # Darker on hover
-                foreground=[("disabled", "#7f8c8d")])
-
-
-    # def update_status(self, message):
-    #     self.status_label.config(text=f"Status: {message}")
-
-    def add_process(self):
-        process = self.process_entry.get().strip()
-        if process and process not in self.processes:
-            self.processes.add(process)
-            self.process_listbox.insert(tk.END, process)  # ✅ Update listbox
-            self.update_graph()
-            # self.update_status(f"Added process {process}")
-        self.process_entry.delete(0, tk.END)
-
-
-    def add_resource(self):
-        resource = self.resource_entry.get().strip()
-        instances = self.instance_entry.get().strip()
-
-        if resource and resource not in self.resources:
-            try:
-                instances = max(1, int(instances))  # Ensure at least 1 instance
-                self.resources[resource] = instances  
-                self.resource_listbox.insert(tk.END, f"{resource} ({instances})")  # ✅ Update listbox
-                self.update_graph()
-                # self.update_status(f"Added resource {resource} with {instances} instances")
-            except ValueError:
-                messagebox.showerror("Invalid Input", "Instances must be a number.")
+        # Matrices notebook
+        matrix_notebook = ttk.Notebook(left_panel)
+        matrix_notebook.pack(fill=tk.BOTH, expand=True, pady=10)
         
-        self.resource_entry.delete(0, tk.END)
-        self.instance_entry.delete(0, tk.END)
-        self.instance_entry.insert(0, "1")  # Reset to default
+        # Allocation tab
+        alloc_frame = ttk.Frame(matrix_notebook)
+        self.allocation_text = scrolledtext.ScrolledText(alloc_frame, bg="#404040", fg="white",
+                                                        insertbackground="white", wrap=tk.NONE)
+        self.allocation_text.pack(fill=tk.BOTH, expand=True)
+        matrix_notebook.add(alloc_frame, text="Allocation Matrix")
+        
+        # Maximum tab
+        max_frame = ttk.Frame(matrix_notebook)
+        self.maximum_text = scrolledtext.ScrolledText(max_frame, bg="#404040", fg="white",
+                                                     insertbackground="white", wrap=tk.NONE)
+        self.maximum_text.pack(fill=tk.BOTH, expand=True)
+        matrix_notebook.add(max_frame, text="Maximum Matrix")
+        
+        # ----------------- Right Panel Contents -----------------
+        # Visualization canvas
+        canvas_frame = ttk.Frame(right_panel)
+        canvas_frame.pack(fill=tk.BOTH, expand=True)
+        
+        self.canvas = tk.Canvas(canvas_frame, bg="#202020", highlightthickness=0)
+        self.canvas.pack(fill=tk.BOTH, expand=True)
+        
+        # Control panel
+        control_frame = ttk.Frame(right_panel)
+        control_frame.pack(fill=tk.X, pady=10)
+        
+        ttk.Button(control_frame, text="⟳ Run Analysis", command=self.run_algorithm,
+                  style="Accent.TButton").pack(side=tk.RIGHT, padx=5)
+        self.result_label = ttk.Label(control_frame, text="Ready", font=('Segoe UI', 11, 'bold'),
+                                     foreground="#888888")
+        self.result_label.pack(side=tk.LEFT)
+        
+        # Add modern scrollbars to canvas
+        self.x_scroll = ttk.Scrollbar(canvas_frame, orient=tk.HORIZONTAL, command=self.canvas.xview)
+        self.x_scroll.pack(fill=tk.X)
+        self.y_scroll = ttk.Scrollbar(canvas_frame, orient=tk.VERTICAL, command=self.canvas.yview)
+        self.y_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        self.canvas.configure(xscrollcommand=self.x_scroll.set, yscrollcommand=self.y_scroll.set)
+        
+        # Create custom style for accent button
+        self.style.configure("Accent.TButton", background="#4CAF50", foreground="white",
+                            font=('Segoe UI', 15, 'bold'))
 
+    def load_test_case(self):
+        case_number = int(self.test_case_combobox.get().split()[-1])
+        test_case = self.test_cases[case_number]
+        
+        self.n_entry.delete(0, tk.END)
+        self.n_entry.insert(0, str(test_case['n']))
+        
+        self.m_entry.delete(0, tk.END)
+        self.m_entry.insert(0, str(test_case['m']))
+        
+        self.total_resources_entry.delete(0, tk.END)
+        self.total_resources_entry.insert(0, " ".join(map(str, test_case['total_resources'])))
+        
+        self.allocation_text.delete(1.0, tk.END)
+        self.allocation_text.insert(tk.END, "\n".join([" ".join(map(str, row)) for row in test_case['allocation']]))
+        
+        self.maximum_text.delete(1.0, tk.END)
+        self.maximum_text.insert(tk.END, "\n".join([" ".join(map(str, row)) for row in test_case['maximum']]))
 
+    def get_test_cases(self):
+        # Same test case data as before
+        return {
+            1: {
+            'n': 5,
+            'm': 3,
+            'total_resources': [10, 5, 7],
+            'allocation': [
+                [0, 1, 0],
+                [2, 0, 0],
+                [3, 0, 2],
+                [2, 1, 1],
+                [0, 0, 2]
+            ],
+            'maximum': [
+                [7, 5, 3],
+                [3, 2, 2],
+                [9, 0, 2],
+                [2, 2, 2],
+                [4, 3, 3]
+            ]
+        },
+        2: {
+            'n': 3,
+            'm': 3,
+            'total_resources': [10, 5, 7],
+            'allocation': [
+                [0, 1, 0],
+                [2, 0, 0],
+                [3, 0, 2]
+            ],
+            'maximum': [
+                [7, 5, 3],
+                [3, 2, 2],
+                [9, 0, 2]
+            ]
+        },
+        3: {
+            'n': 4,
+            'm': 2,
+            'total_resources': [8, 6],
+            'allocation': [
+                [1, 1],
+                [2, 1],
+                [1, 2],
+                [1, 1]
+            ],
+            'maximum': [
+                [3, 3],
+                [4, 3],
+                [3, 2],
+                [2, 2]
+            ]
+        },
+        4: {
+            'n': 4,
+            'm': 2,
+            'total_resources': [5, 5],
+            'allocation': [
+                [2, 1],
+                [1, 2],
+                [1, 1],
+                [0, 0]
+            ],
+            'maximum': [
+                [4, 3],
+                [3, 4],
+                [2, 2],
+                [4, 3]
+            ]
+            
+        },
+        5: {
+            'n': 3,
+            'm': 3,
+            'total_resources': [7, 7, 7],
+            'allocation': [
+                [3, 3, 3],
+                [2, 2, 2],
+                [1, 1, 1]
+            ],
+            'maximum': [
+                [7, 7, 7],
+                [6, 6, 6],
+                [5, 5, 5]
+            ]
+        },
+        6: {
+            'n': 3,
+            'm': 3,
+            'total_resources': [6, 6, 6],
+            'allocation': [
+                [2, 2, 1],
+                [1, 1, 3],
+                [2, 1, 1]
+            ],
+            'maximum': [
+                [4, 4, 2],
+                [5, 4, 4],
+                [3, 3, 3]
+            ]
+        },
+        7: {
+            'n': 4,
+            'm': 2,
+            'total_resources': [10, 10],
+            'allocation': [
+                [3, 3],
+                [2, 2],
+                [3, 2],
+                [1, 2]
+            ],
+            'maximum': [
+                [8, 7],
+                [5, 6],
+                [7, 4],
+                [4, 5]
+            ]
+        },
+        8: {
+            'n': 3,
+            'm': 3,
+            'total_resources': [5, 5, 5],
+            'allocation': [
+                [1, 2, 1],
+                [2, 1, 2],
+                [1, 1, 1]
+            ],
+            'maximum': [
+                [3, 3, 3],
+                [3, 3, 3],
+                [3, 3, 3]
+            ]
+        }
+        }
 
-    def request_resource(self):
-        process = self.process_entry.get().strip()
-        resource = self.resource_entry.get().strip()
-        instances_input = self.instance_entry.get().strip()
-
-        if not process or not resource:
-            messagebox.showwarning("Invalid Input", "Please enter both a process and a resource.")
-            return
-
-        # Automatically add process if it doesn't exist
-        if process not in self.processes:
-            self.processes.add(process)
-            self.process_listbox.insert(tk.END, process)
-
-        # Automatically add resource if it doesn't exist, using instance entry
-        if resource not in self.resources:
-            try:
-                instances = max(1, int(instances_input))  # Ensure at least 1 instance
-            except ValueError:
-                instances = 1  # Default to 1 if invalid or empty
-            self.resources[resource] = instances
-            self.resource_listbox.insert(tk.END, f"{resource} ({instances})")
-
-        # Add the request edge
-        self.edges.add((process, resource))
-        self.update_graph()
-
-        # Clear entries (but keep instance default at 1)
-        self.process_entry.delete(0, tk.END)
-        self.resource_entry.delete(0, tk.END)
-        # Reset instance entry to default value
-        self.instance_entry.delete(0, tk.END)
-        self.instance_entry.insert(0, "1")
-
-    def allocate_resource(self):
-        process = self.process_entry.get().strip()
-        resource = self.resource_entry.get().strip()
-        instances_input = self.instance_entry.get().strip()
-
-        if not process or not resource:
-            messagebox.showwarning("Invalid Input", "Please enter both a process and a resource.")
-            return
-
-        # Automatically add process if it doesn't exist
-        if process not in self.processes:
-            self.processes.add(process)
-            self.process_listbox.insert(tk.END, process)
-
-        # Automatically add resource if it doesn't exist, using instance entry
-        if resource not in self.resources:
-            try:
-                instances = max(1, int(instances_input))  # Ensure at least 1 instance
-            except ValueError:
-                instances = 1  # Default to 1 if invalid or empty
-            self.resources[resource] = instances
-            self.resource_listbox.insert(tk.END, f"{resource} ({instances})")
-
-        # Add the allocation edge
-        self.edges.add((resource, process))
-        self.update_graph()
-
-        # Clear entries (but keep instance default at 1)
-        self.process_entry.delete(0, tk.END)
-        self.resource_entry.delete(0, tk.END)
-        # Reset instance entry to default value
-        self.instance_entry.delete(0, tk.END)
-        self.instance_entry.insert(0, "1")
-
-    def detect_deadlock(self):
-        graph = nx.DiGraph()
-        graph.add_edges_from(self.edges)
-
+    def run_algorithm(self):
         try:
-            cycle = nx.find_cycle(graph, orientation='original')
-            self.deadlock_nodes = {node for edge in cycle for node in edge}
-            self.deadlock_edges = set((u, v) for u, v, _ in cycle)  # Store edges without orientation
-            self.update_graph()
-
-            # Build the cycle as an ordered sequence of nodes
-            cycle_path = [edge[0] for edge in cycle] + [cycle[-1][1]]  # Start nodes + final target
-            cycle_nodes = " → ".join(cycle_path)
-            messagebox.showwarning("Deadlock Detected", f"Cycle Found: {cycle_nodes}")
-        except nx.NetworkXNoCycle:
-            self.deadlock_nodes.clear()
-            self.deadlock_edges.clear()
-            messagebox.showinfo("No Deadlock", "No deadlock detected!")
-
-
-
-
-    def reset_graph(self):
-        self.processes.clear()
-        self.resources.clear()
-        self.edges.clear()
-        self.deadlock_nodes.clear()
-
-        self.process_listbox.delete(0, tk.END)
-        self.resource_listbox.delete(0, tk.END)
-
-        self.update_graph()
-        # self.update_status("Graph reset")
-
-    def update_graph(self):
-        self.ax.clear()
-        G = nx.DiGraph()
-        G.add_edges_from(self.edges)
-
-        pos = {}  # Position dictionary for nodes
-        process_x, resource_x = -1.5, 1.5
-        process_y, resource_y = 1.0, 1.0
-        spacing_y = 1.0  # More spacing to prevent overlap
-
-        # Assign positions for processes (stacked vertically)
-        for i, process in enumerate(self.processes):
-            pos[process] = (process_x, process_y - i * spacing_y)
-
-        # Assign positions for resources (stacked vertically)
-        for i, resource in enumerate(self.resources):
-            pos[resource] = (resource_x, resource_y - i * spacing_y)
-
-        # Draw nodes with deadlock indication
-        for node in G.nodes:
-            x, y = pos[node]
-            color = "#e74c3c" if node in self.deadlock_nodes else ("blue" if node in self.processes else "green")
-            edge_color = "black" if node not in self.deadlock_nodes else "red"
-
-            if node in self.processes:
-                self.ax.scatter(x, y, s=900, c=color, edgecolors=edge_color)
-                self.ax.text(x, y, node, fontsize=14, fontweight="bold", ha='center', va='center', color="white")
-            elif node in self.resources:
-                instances = self.resources[node]
+            # Collect input data
+            n = int(self.n_entry.get())
+            m = int(self.m_entry.get())
+            total_resources = list(map(int, self.total_resources_entry.get().split()))
+            
+            # Validate matrix dimensions
+            allocation = []
+            allocation_lines = self.allocation_text.get(1.0, tk.END).splitlines()
+            for i, line in enumerate(allocation_lines):
+                if line.strip():
+                    row = list(map(int, line.split()))
+                    if len(row) != m:
+                        raise ValueError(f"Allocation matrix row {i} has {len(row)} entries, expected {m}")
+                    allocation.append(row)
+            if len(allocation) != n:
+                raise ValueError(f"Allocation matrix has {len(allocation)} rows, expected {n}")
+            
+            maximum = []
+            maximum_lines = self.maximum_text.get(1.0, tk.END).splitlines()
+            for i, line in enumerate(maximum_lines):
+                if line.strip():
+                    row = list(map(int, line.split()))
+                    if len(row) != m:
+                        raise ValueError(f"Maximum matrix row {i} has {len(row)} entries, expected {m}")
+                    maximum.append(row)
+            if len(maximum) != n:
+                raise ValueError(f"Maximum matrix has {len(maximum)} rows, expected {n}")
+            
+            # Calculate allocated and available resources
+            allocated = [sum(allocation[i][j] for i in range(n)) for j in range(m)]
+            available = [total_resources[j] - allocated[j] for j in range(m)]
+            
+            # Calculate need matrix
+            need = []
+            for i in range(n):
+                row = [maximum[i][j] - allocation[i][j] for j in range(m)]
+                need.append(row)
+            
+            # Initialize work and finish arrays
+            work = available.copy()
+            finish = [False] * n
+            safe_sequence = []
+            
+            # Check for resource starvation
+            total_available = [available[j] + sum(allocation[i][j] for i in range(n)) for j in range(m)]
+            for i in range(n):
+                if any(maximum[i][j] > total_available[j] for j in range(m)):
+                    self.display_results(False, [])
+                    self.draw_rag(n, m, allocation, maximum, available, need)
+                    messagebox.showwarning("Resource Starvation", 
+                                        f"Process P{i} requests more resources than exist in the system")
+                    return
+            
+            # Run Banker's algorithm
+            attempts = 0
+            max_attempts = n * 2  # Allow multiple passes through process list
+            
+            while False in finish and attempts < max_attempts:
+                found = False
+                for i in range(n):
+                    if not finish[i]:
+                        # Check if process can complete with current resources
+                        can_complete = all(need[i][j] <= work[j] for j in range(m))
+                        
+                        if can_complete:
+                            # Process can run, add its resources back
+                            for j in range(m):
+                                work[j] += allocation[i][j]
+                            finish[i] = True
+                            safe_sequence.append(f"P{i}")
+                            found = True
+                            break
                 
-                rect_width = 0.3 + (0.07 * instances)
-                rect_height = 0.2
-                rect = plt.Rectangle((x - rect_width / 2, y - rect_height / 2), rect_width, rect_height, fc=color, edgecolor=edge_color, lw=2)
+                if not found:
+                    attempts += 1
+                    if attempts >= max_attempts:
+                        break  # Deadlock detected
+            
+            # Check if all processes finished
+            is_safe = all(finish)
+            
+            # Display results
+            self.display_results(is_safe, safe_sequence)
+            self.draw_rag(n, m, allocation, maximum, available, need)
+            
+            # Show detailed explanation
+            explanation = self.generate_explanation(is_safe, safe_sequence, n, finish, allocation, need, available)
+            self.show_explanation(explanation)
+            
+        except ValueError as e:
+            messagebox.showerror("Input Error", str(e))
+        except Exception as e:
+            messagebox.showerror("Error", f"An unexpected error occurred: {str(e)}")
 
-                self.ax.add_patch(rect)
+    def generate_explanation(self, is_safe, sequence, n, finish, allocation, need, available):
+        explanation = []
+        
+        if is_safe:
+            explanation.append("SYSTEM IS IN A SAFE STATE")
+            explanation.append("\nSafe execution sequence:")
+            explanation.append(" → ".join(sequence))
+            
+            explanation.append("\n\nStep-by-step explanation:")
+            work = available.copy()
+            for i, process in enumerate(sequence):
+                pid = int(process[1:])  # Extract process number from "P0", "P1", etc.
+                explanation.append(f"\nStep {i+1}: Execute {process}")
+                explanation.append(f"- Currently holds: {allocation[pid]}")
+                explanation.append(f"- Needs: {need[pid]}")
+                explanation.append(f"- Work available: {work}")
+                
+                # Show resources being released
+                new_work = [work[j] + allocation[pid][j] for j in range(len(work))]
+                explanation.append(f"- After completion, releases resources: {allocation[pid]}")
+                explanation.append(f"- New work available: {new_work}")
+                work = new_work
+        else:
+            explanation.append("SYSTEM IS IN AN UNSAFE STATE - DEADLOCK DETECTED")
+            
+            blocked = [i for i in range(n) if not finish[i]]
+            explanation.append(f"\nBlocked processes: {', '.join(f'P{i}' for i in blocked)}")
+            
+            explanation.append("\nDeadlock analysis:")
+            for i in blocked:
+                explanation.append(f"\nProcess P{i}:")
+                explanation.append(f"- Currently holds: {allocation[i]}")
+                explanation.append(f"- Needs: {need[i]}")
+                explanation.append(f"- Available resources: {available}")
+                
+                # Find which resources are insufficient
+                insufficient = [j for j in range(len(available)) if need[i][j] > available[j]]
+                if insufficient:
+                    explanation.append(f"- Cannot proceed because resources {insufficient} are insufficient")
+                else:
+                    explanation.append("- Could theoretically run (this suggests a circular wait)")
+        
+        return "\n".join(explanation)
 
-                for i in range(instances):
-                    self.ax.scatter(x - (rect_width / 2) + (i * (rect_width / instances)) + 0.06, y, s=70, c="white", edgecolors="black")
+    def show_explanation(self, text):
+        # Create a new window for detailed explanation
+        win = tk.Toplevel(self.root)
+        win.title("Detailed Explanation")
+        
+        text_widget = scrolledtext.ScrolledText(win, width=80, height=25, wrap=tk.WORD)
+        text_widget.insert(tk.END, text)
+        text_widget.pack(fill=tk.BOTH, expand=True)
+        
+        ttk.Button(win, text="Close", command=win.destroy).pack(pady=5)
 
-                self.ax.text(x, y + 0.15, node, fontsize=14, fontweight="bold", ha='center', va='bottom', color="black")
+    def display_results(self, safe, sequence):
+        text = "SAFE STATE - Sequence: " + " → ".join(sequence) if safe else "UNSAFE STATE - Deadlock Detected"
+        color = "green" if safe else "red"
+        self.result_label.config(text=text, foreground=color)
 
-        # Draw edges (Highlight Deadlock Edges)
-        for edge in G.edges:
-            start, end = edge
-            color = "red" if edge in self.deadlock_edges else "black"
-            lw = 3 if edge in self.deadlock_edges else 2
+    def draw_rag(self, n, m, allocation, maximum, available, need):
+        self.canvas.delete("all")
+        node_size = 60
+        spacing = 120
+        canvas_width = max(800, m*150 + 400)
+        self.canvas.config(scrollregion=(0, 0, canvas_width, n*spacing + 100))
+        
+        # Draw processes (left side)
+        process_nodes = {}
+        for i in range(n):
+            x = 100
+            y = 100 + i*spacing
+            # Modern process node with gradient
+            self.canvas.create_oval(x, y, x+node_size, y+node_size, 
+                                   fill="#2196F3", outline="#1976D2", width=2)
+            self.canvas.create_text(x+node_size/2, y+node_size/2, 
+                                  text=f"P{i}", fill="white",
+                                  font=('Segoe UI', 10, 'bold'))
+            process_nodes[i] = (x+node_size, y+node_size/2)
 
-            self.ax.annotate("", xy=pos[end], xytext=pos[start],
-                            arrowprops=dict(arrowstyle="->", color=color, lw=lw))
+        # Draw resources (right side)
+        resource_nodes = {}
+        for j in range(m):
+            x = 400 + j*150
+            y = 100
+            # Modern resource node with shadow
+            self.canvas.create_rectangle(x+2, y+2, x+node_size+2, y+node_size+2, 
+                                        fill="#666666", outline="")
+            self.canvas.create_rectangle(x, y, x+node_size, y+node_size, 
+                                        fill="#607D8B", outline="#455A64", width=2)
+            self.canvas.create_text(x+node_size/2, y+node_size/2, 
+                                  text=f"R{j}\n{available[j]}/{available[j]+sum(a[j] for a in allocation)}", 
+                                  fill="white", font=('Segoe UI', 9))
+            resource_nodes[j] = (x, y+node_size/2)
 
-        # Set axes limits with padding to avoid clipping
-        if pos:  # Only set limits if there are nodes
-            x_coords = [p[0] for p in pos.values()]
-            y_coords = [p[1] for p in pos.values()]
-            x_min, x_max = min(x_coords), max(x_coords)
-            y_min, y_max = min(y_coords), max(y_coords)
+        # Draw allocation edges
+        for i in range(n):
+            for j in range(m):
+                if allocation[i][j] > 0:
+                    self.create_arrow(resource_nodes[j], process_nodes[i], 
+                                     allocation[i][j], "#4CAF50")
 
-            # Add padding (adjust based on circle size; 0.5 is roughly half the circle diameter in data units)
-            padding = 0.5
-            self.ax.set_xlim(x_min - padding, x_max + padding)
-            self.ax.set_ylim(y_min - padding, y_max + padding)
+        # Draw request edges
+        for i in range(n):
+            for j in range(m):
+                if need[i][j] > 0:
+                    self.create_arrow(process_nodes[i], resource_nodes[j], 
+                                     need[i][j], "#FF5722")
 
-        # Keep equal aspect ratio
-        self.ax.set_aspect('equal')
-
-        # Remove axis
-        self.ax.set_frame_on(False)
-        self.ax.set_xticks([])
-        self.ax.set_yticks([])
-        self.ax.set_xticklabels([])
-        self.ax.set_yticklabels([])
-        self.ax.axis("off")
-
-        self.canvas.draw()
-
+    def create_arrow(self, start, end, quantity, color):
+        x1, y1 = start
+        x2, y2 = end
+        # Smooth curved arrow
+        self.canvas.create_line(x1, y1, x2, y2, fill=color, width=2, 
+                               arrow=tk.LAST, arrowshape=(12, 15, 6),
+                               smooth=True, splinesteps=12)
+        # Modern quantity badge
+        cx, cy = (x1+x2)/2, (y1+y2)/2-15
+        self.canvas.create_rectangle(cx-15, cy-10, cx+15, cy+10, 
+                                    fill=color, outline="")
+        self.canvas.create_text(cx, cy, text=str(quantity), fill="white",
+                               font=('Segoe UI', 8, 'bold'))
 
 if __name__ == "__main__":
     root = tk.Tk()
-    app = ResourceAllocationSimulator(root)
+    app = BankersGUI(root)
     root.mainloop()
