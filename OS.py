@@ -465,64 +465,70 @@ class BankersGUI:
         self.canvas.delete("all")
         node_size = 60
         spacing = 120
-        canvas_width = max(800, m*150 + 400)
-        self.canvas.config(scrollregion=(0, 0, canvas_width, n*spacing + 100))
-        
-        # Draw processes (left side)
+        canvas_width = max(800, m * 150 + 400)
+        self.canvas.config(scrollregion=(0, 0, canvas_width, n * spacing + 100))
+
         process_nodes = {}
+        resource_nodes = {}
+
+        # Draw processes (left side)
         for i in range(n):
-            x = 100
-            y = 100 + i*spacing
-            # Modern process node with gradient
-            self.canvas.create_oval(x, y, x+node_size, y+node_size, 
-                                   fill="#2196F3", outline="#1976D2", width=2)
-            self.canvas.create_text(x+node_size/2, y+node_size/2, 
-                                  text=f"P{i}", fill="white",
-                                  font=('Segoe UI', 10, 'bold'))
-            process_nodes[i] = (x+node_size, y+node_size/2)
+            x, y = 100, 100 + i * spacing
+            self.canvas.create_oval(x, y, x + node_size, y + node_size,
+                                    fill="#2196F3", outline="#1976D2", width=2)
+            self.canvas.create_text(x + node_size / 2, y + node_size / 2,
+                                    text=f"P{i}", fill="white",
+                                    font=('Segoe UI', 10, 'bold'))
+            process_nodes[i] = (x + node_size, y + node_size / 2)
 
         # Draw resources (right side)
-        resource_nodes = {}
         for j in range(m):
-            x = 400 + j*150
-            y = 100
-            # Modern resource node with shadow
-            self.canvas.create_rectangle(x+2, y+2, x+node_size+2, y+node_size+2, 
+            x, y = 400 + j * 150, 100
+            self.canvas.create_rectangle(x + 2, y + 2, x + node_size + 2, y + node_size + 2,
                                         fill="#666666", outline="")
-            self.canvas.create_rectangle(x, y, x+node_size, y+node_size, 
+            self.canvas.create_rectangle(x, y, x + node_size, y + node_size,
                                         fill="#607D8B", outline="#455A64", width=2)
-            self.canvas.create_text(x+node_size/2, y+node_size/2, 
-                                  text=f"R{j}\n{available[j]}/{available[j]+sum(a[j] for a in allocation)}", 
-                                  fill="white", font=('Segoe UI', 9))
-            resource_nodes[j] = (x, y+node_size/2)
+            self.canvas.create_text(x + node_size / 2, y + node_size / 2,
+                                    text=f"R{j}\n{available[j]}/{available[j] + sum(a[j] for a in allocation)}",
+                                    fill="white", font=('Segoe UI', 9))
+            resource_nodes[j] = (x, y + node_size / 2)
 
-        # Draw allocation edges
+        # Draw allocation edges (solid green)
         for i in range(n):
             for j in range(m):
                 if allocation[i][j] > 0:
-                    self.create_arrow(resource_nodes[j], process_nodes[i], 
-                                     allocation[i][j], "#4CAF50")
+                    self.create_curved_arrow(resource_nodes[j], process_nodes[i],
+                                            allocation[i][j], "#4CAF50", solid=True)
 
-        # Draw request edges
+        # Draw request edges (dashed orange)
         for i in range(n):
             for j in range(m):
                 if need[i][j] > 0:
-                    self.create_arrow(process_nodes[i], resource_nodes[j], 
-                                     need[i][j], "#FF5722")
+                    self.create_curved_arrow(process_nodes[i], resource_nodes[j],
+                                            need[i][j], "#FF5722", solid=False)
 
-    def create_arrow(self, start, end, quantity, color):
+    def create_curved_arrow(self, start, end, quantity, color, solid=True):
         x1, y1 = start
         x2, y2 = end
-        # Smooth curved arrow
-        self.canvas.create_line(x1, y1, x2, y2, fill=color, width=2, 
-                               arrow=tk.LAST, arrowshape=(12, 15, 6),
-                               smooth=True, splinesteps=12)
-        # Modern quantity badge
-        cx, cy = (x1+x2)/2, (y1+y2)/2-15
-        self.canvas.create_rectangle(cx-15, cy-10, cx+15, cy+10, 
+
+        # Offset to prevent overlap
+        offset = 20 if solid else -20  
+
+        # Control point for Bezier curve
+        cx, cy = (x1 + x2) / 2, (y1 + y2) / 2 + offset
+
+        # Draw curved edge
+        self.canvas.create_line(x1, y1, cx, cy, x2, y2, fill=color, width=2,
+                                arrow=tk.LAST, arrowshape=(12, 15, 6),
+                                smooth=True, splinesteps=12,
+                                dash=() if solid else (5, 3))  # Dashed for request edges
+
+        # Draw quantity label
+        label_x, label_y = (x1 + x2) / 2, (y1 + y2) / 2 - 15
+        self.canvas.create_rectangle(label_x - 15, label_y - 10, label_x + 15, label_y + 10,
                                     fill=color, outline="")
-        self.canvas.create_text(cx, cy, text=str(quantity), fill="white",
-                               font=('Segoe UI', 8, 'bold'))
+        self.canvas.create_text(label_x, label_y, text=str(quantity), fill="white",
+                                font=('Segoe UI', 8, 'bold'))
 
 if __name__ == "__main__":
     root = tk.Tk()
