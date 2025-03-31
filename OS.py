@@ -1,6 +1,9 @@
 import tkinter as tk
 from tkinter import ttk, messagebox, scrolledtext
-import math
+import ctypes
+
+ctypes.windll.shcore.SetProcessDpiAwareness(1)
+
 
 class BankersGUI:
     def __init__(self, root):
@@ -10,6 +13,14 @@ class BankersGUI:
         self.configure_styles()
         self.create_widgets()
         self.test_cases = self.get_test_cases()
+        # self.canvas.scale("all", 0, 0, 1.5, 1.5)
+        self.root.state('zoomed')
+        # root = tk.Tk()
+        root.tk.call('tk', 'scaling', 2.0)
+        # self.canvas = tk.Canvas(self.root, bg="white", width=1000, height=600)  # Set desired size
+        # self.canvas.pack(side="right", padx=10, pady=10)
+        # canvas = tk.Canvas(root)
+        # canvas.scale("all", 0, 0, 1.5, 1.5)
         
     def configure_styles(self):
         self.style.theme_create("bankers", parent="alt", settings={
