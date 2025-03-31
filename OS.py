@@ -137,7 +137,7 @@ class BankersGUI:
         canvas_frame = ttk.Frame(right_panel)
         canvas_frame.pack(fill=tk.BOTH, expand=True)
         
-        self.canvas = tk.Canvas(canvas_frame, bg="#202020", highlightthickness=0)
+        self.canvas = tk.Canvas(canvas_frame, bg="#808080", highlightthickness=0)
         self.canvas.pack(fill=tk.BOTH, expand=True)
         
         # Control panel
