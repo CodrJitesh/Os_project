@@ -475,7 +475,7 @@ class BankersGUI:
     def draw_rag(self, n, m, allocation, maximum, available, need):
         self.canvas.delete("all")
         node_size = 80
-        spacing = 160
+        spacing = 200
         canvas_width = max(800, m * 150 + 400)
         self.canvas.config(scrollregion=(0, 0, canvas_width, n * spacing + 100))
 
@@ -494,7 +494,7 @@ class BankersGUI:
 
         # Draw resources (right side)
         for j in range(m):
-            x, y = 550, 150 + j * spacing 
+            x, y = 700, 150 + j * spacing 
             self.canvas.create_rectangle(x + 2, y + 2, x + node_size + 2, y + node_size + 2,
                                         fill="#666666", outline="")
             self.canvas.create_rectangle(x, y, x + node_size, y + node_size,
@@ -530,16 +530,41 @@ class BankersGUI:
 
         # Draw curved edge
         self.canvas.create_line(x1, y1, cx, cy, x2, y2, fill=color, width=3,
-                                arrow=tk.LAST, arrowshape=(12, 15, 6),
+                                arrow=tk.LAST, arrowshape=(0,0,0),
                                 smooth=True, splinesteps=12,
                                 dash=() if solid else (5, 3))  # Dashed for request edges
+        # Find the midpoint of the edge
+        if True:
+            label_x, label_y = (x1 + x2) / 2, (y1 + y2) / 2
 
-        # Draw quantity label
-        label_x, label_y = (x1 + x2) / 2, (y1 + y2) / 2 - 15
-        self.canvas.create_rectangle(label_x - 15, label_y - 10, label_x + 15, label_y + 10,
-                                    fill=color, outline="")
-        self.canvas.create_text(label_x, label_y, text=str(quantity), fill="white",
-                                font=('Segoe UI', 8, 'bold'))
+            # Compute perpendicular offset
+            dx = x2 - x1
+            dy = y2 - y1
+            length = (dx**2 + dy**2) ** 0.5  # Distance between points
+
+            if length != 0:
+                dx /= length
+                dy /= length
+
+            # Apply perpendicular shift (adjust 15 pixels as needed)
+            offset_x = dy * 25
+            offset_y = -dx * 10
+
+            # Adjust the label position
+            label_x += offset_x
+            label_y += offset_y
+
+            # Draw the background rectangle
+            # self.canvas.create_rectangle(label_x - 15, label_y - 10, label_x + 15, label_y + 10, outline="")
+
+            # Draw the quantity text
+            if solid:
+                self.canvas.create_text(label_x, label_y, text=str(quantity), fill="white",
+                                    font=('Segoe UI', 12, 'bold'))
+            # else:
+            #     self.canvas.create_text(label_x, label_y, text=str(quantity), fill="white",
+            #                         font=('Segoe UI', 12, 'bold'))
+
 
 if __name__ == "__main__":
     root = tk.Tk()
