@@ -484,7 +484,7 @@ class BankersGUI:
 
         # Draw processes (left side)
         for i in range(n):
-            x, y = 150, 150 + i * spacing
+            x, y = 200, 150 + i * spacing
             self.canvas.create_oval(x, y, x + node_size, y + node_size,
                                     fill="#2196F3", outline="#1976D2", width=2)
             self.canvas.create_text(x + node_size / 2, y + node_size / 2,
@@ -494,7 +494,7 @@ class BankersGUI:
 
         # Draw resources (right side)
         for j in range(m):
-            x, y = 500, 150 + j * spacing 
+            x, y = 550, 150 + j * spacing 
             self.canvas.create_rectangle(x + 2, y + 2, x + node_size + 2, y + node_size + 2,
                                         fill="#666666", outline="")
             self.canvas.create_rectangle(x, y, x + node_size, y + node_size,
@@ -509,7 +509,7 @@ class BankersGUI:
             for j in range(m):
                 if allocation[i][j] > 0:
                     self.create_curved_arrow(resource_nodes[j], process_nodes[i],
-                                            allocation[i][j], "#4CAF50", solid=True)
+                                            allocation[i][j], "#1fff00", solid=True)
 
         # Draw request edges (dashed orange)
         for i in range(n):
