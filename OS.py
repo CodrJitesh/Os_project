@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter import ttk, messagebox, scrolledtext
+import google.generativeai as genai
 import ctypes
 
 ctypes.windll.shcore.SetProcessDpiAwareness(1)
@@ -13,6 +14,19 @@ class BankersGUI:
         self.configure_styles()
         self.create_widgets()
         self.test_cases = self.get_test_cases()
+        try:
+            # !! REPLACE "YOUR_API_KEY_HERE" WITH YOUR ACTUAL KEY !!
+            self.api_key = "AIzaSyDKPfQibC8-8hpp0d5Wxq1SI_TUspteeno"
+            if not self.api_key or self.api_key == "YOUR_API_KEY_HERE":
+                 print("WARNING: API Key not set. AI feature will fail.")
+                 self.ai_enabled = False
+            else:
+                genai.configure(api_key=self.api_key)
+                self.ai_enabled = True
+                print("Gemini AI Configured.") # Optional confirmation
+        except Exception as e:
+             print(f"ERROR: Failed to configure Gemini API: {e}")
+             self.ai_enabled = False
         # self.canvas.scale("all", 0, 0, 1.5, 1.5)
         self.root.state('zoomed')
         # root = tk.Tk()
@@ -21,7 +35,8 @@ class BankersGUI:
         # self.canvas.pack(side="right", padx=10, pady=10)
         # canvas = tk.Canvas(root)
         # canvas.scale("all", 0, 0, 1.5, 1.5)
-        
+    
+       
     def configure_styles(self):
         self.style.theme_create("bankers", parent="alt", settings={
             "TFrame": {"configure": {"background": "#2E2E2E"}},
@@ -405,7 +420,7 @@ class BankersGUI:
             
             # Show detailed explanation
             explanation = self.generate_explanation(is_safe, safe_sequence, n, finish, allocation, need, available)
-            self.show_explanation(explanation)
+            self.show_explanation(explanation, is_safe, safe_sequence, finish)
             
         except ValueError as e:
             messagebox.showerror("Input Error", str(e))
@@ -456,7 +471,7 @@ class BankersGUI:
         
         return "\n".join(explanation)
 
-    def show_explanation(self, text):
+    def show_explanation(self, text, is_safe, safe_sequence, finish_list):
         # Create a new window for detailed explanation
         win = tk.Toplevel(self.root)
         win.title("Detailed Explanation")
@@ -464,6 +479,22 @@ class BankersGUI:
         text_widget = scrolledtext.ScrolledText(win, width=80, height=25, wrap=tk.WORD)
         text_widget.insert(tk.END, text)
         text_widget.pack(fill=tk.BOTH, expand=True)
+        text_widget.config(state=tk.DISABLED) # Make read-only
+
+        # Frame for buttons
+        button_frame = ttk.Frame(win)
+        button_frame.pack(fill=tk.X, padx=10, pady=10)
+        ttk.Button(button_frame, text="Close", command=win.destroy).pack(side=tk.RIGHT, padx=(5, 0))
+
+        # AI Explanation Button (align right, next to close)
+        # Pass the text content to the command function
+        ai_button = ttk.Button(button_frame, text="🤖 Get AI Explanation",
+                               command=lambda t=text_widget.get(1.0, tk.END), s=is_safe, seq=safe_sequence, f=finish_list: \
+                                        self.get_ai_explanation(t, s, seq, f))
+        ai_button.pack(side=tk.RIGHT, padx=(0, 5))
+
+        if not self.ai_enabled:
+            ai_button.config(state=tk.DISABLED)
         
         ttk.Button(win, text="Close", command=win.destroy).pack(pady=5)
 
@@ -564,7 +595,117 @@ class BankersGUI:
             # else:
             #     self.canvas.create_text(label_x, label_y, text=str(quantity), fill="white",
             #                         font=('Segoe UI', 12, 'bold'))
+    
+    def get_ai_explanation(self, explanation_text, is_safe, safe_sequence, finish_list):
+        """Calls the Gemini API to get an explanation."""
+        if not self.ai_enabled:
+            messagebox.showerror("AI Error", "AI feature is disabled (check API key configuration).")
+            return
 
+        # Optional: Add a simple "loading" popup here if you want user feedback
+        print("Contacting Gemini AI...") # Simple console feedback
+
+        try:
+            # Initialize the model
+            # Make sure you have 'gemini-1.5-flash-latest' available or choose another model
+            model = genai.GenerativeModel('gemini-1.5-flash-latest')
+
+            # --- Prompt ---
+            # This tells the AI what to do with the text you send it
+            if is_safe:
+            # Use the actual sequence found by your code
+                state_summary = f"Good news! The system is currently in a SAFE state. This means there's a guaranteed way for all processes ({', '.join(safe_sequence)}) to finish without getting stuck forever."
+                details_section = f"""
+    How the Safe Sequence Works ({' -> '.join(safe_sequence)}):
+    Think of it like a well-managed queue. Here's the idea:
+    1. The system looks at the first process in the sequence. It checks if the resources currently 'Available' are enough to satisfy what that process still 'Needs'.
+    2. Because the state is safe, there *are* enough resources. So, the process gets what it needs, does its work, and finishes.
+    3. When it's done, it releases all the resources it was using (its 'Allocation'). This is key!
+    4. These released resources are added back to the 'Available' pool.
+    5. Now the system looks at the *next* process in the sequence. Because the previous one released resources, there's a better chance the system has enough for this next one.
+    6. This continues down the line. Each process running and releasing resources makes it possible for the next one to go. This prevents a situation where everyone is waiting for resources held by someone else who's also waiting (that's deadlock!).
+    """
+                analogy_request = "Explain this safe state using a simple, everyday analogy. For example, think about sharing limited tools in a workshop where people return tools promptly, allowing others to use them, or maybe a single-lane bridge with a good traffic light system."
+            else:
+                # Use the actual list of potentially blocked processes
+                blocked_pids = [f'P{i}' for i, finished in enumerate(finish_list) if not finished]
+                state_summary = f"Looks like the system is in an UNSAFE state. This is a warning sign! It means the system *cannot guarantee* that all processes will be able to finish. There's a risk they could get stuck in a deadlock. The processes that might get stuck are: {', '.join(blocked_pids)}."
+                details_section = f"""
+    Why it's Unsafe (Risk of Deadlock):
+    Let's look at the processes that couldn't be guaranteed to finish ({', '.join(blocked_pids)}):
+    1. Check the simulation data to see what resources each of these processes still 'Needs'.
+    2. Compare that to the resources that were 'Available' in the system when the simulation realized it couldn't find another process to run safely.
+    3. The problem is that the 'Available' resources are *not enough* to meet the 'Need' of *any* of these waiting processes.
+    4. So, they all have to wait. But the resources they are waiting for might be held by *other waiting processes*!
+    5. This creates a potential 'circular wait' – everyone is stuck waiting for someone else who is also stuck waiting. That's the essence of deadlock. The system can't promise a way out of this situation from this state.
+    """
+                analogy_request = "Explain this unsafe state using a simple, everyday analogy. Imagine a traffic jam in a small intersection where four cars all want to go straight, but each one blocks the car to its right – nobody can move! Or maybe two people who each have one of two keys needed to open a box, but they need the other person's key first."
+
+            prompt = f"""
+    You are a friendly and helpful Operating Systems assistant explaining the results of a Banker's Algorithm simulation. Use clear, simple language and focus on making the concepts easy to grasp.
+
+    Here's the simulation data I have:
+    --- Simulation Data ---
+    {explanation_text}
+    --- End Simulation Data ---
+
+    Please explain the following based *only* on the data provided. Use the headings I've provided below and write in plain text (no bolding or other markdown formatting):
+
+    What's the Situation? (System State)
+    {state_summary} Is the system safe or unsafe? What does that mean in simple terms for the processes trying to run?
+
+    How it Works or Doesn't (Detailed Explanation)
+    {details_section} If it's safe, explain step-by-step how the safe sequence allows processes to finish. If it's unsafe, explain clearly why processes might get stuck, pointing to the 'Need' vs 'Available' issue from the data.
+
+    Think of it Like This: (Analogy)
+    {analogy_request} Give a simple, relatable real-world analogy that matches whether the state was safe or unsafe.
+
+    Bottom Line: (Conclusion)
+    In one sentence, what's the main takeaway about how well the system is handling its resources in this specific scenario?
+
+    Remember to be clear, helpful, and use plain text only!
+    """
+            # <<< --- END OF NEW PROMPT SECTION --- >>>
+
+            # --- Make API Call (remains the same) ---
+            response = model.generate_content(prompt)
+
+            print("AI Response Received.")
+            # --- Display the Response (remains the same) ---
+            self.show_ai_result(response.text)
+
+        except Exception as e:
+            messagebox.showerror("AI API Error", f"Failed to get explanation from AI: {str(e)}")
+            print(f"Gemini API Error: {e}") # Log details to console
+    # <<< --- END OF NEW METHOD --- >>>
+    # <<< --- ADD THIS ENTIRE METHOD --- >>>
+    def show_ai_result(self, ai_text):
+        """Displays the AI's explanation in a new window."""
+        ai_win = tk.Toplevel(self.root)
+        ai_win.title("🤖 AI Explanation")
+        ai_win.geometry("850x650") # Adjust size as needed
+        text_frame = ttk.Frame(ai_win)
+        text_frame.pack(fill=tk.BOTH, expand=True, padx=15, pady=(15, 5)) # Increased padding
+        # Use ScrolledText for potentially long responses
+        ai_widget = scrolledtext.ScrolledText(text_frame, width=90, height=30, wrap=tk.WORD,
+                                              bg="#424242", # Medium-dark grey background
+                                              fg="#F5F5F5", # Light grey/off-white text (good contrast)
+                                              insertbackground="white", # White cursor
+                                              font=("Segoe UI", 11)) # Slightly larger, readable font
+        ai_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        ai_widget.insert(tk.END, ai_text)
+        ai_widget.config(state=tk.DISABLED) # Make read-only
+
+        # Add a close button to this window too
+        button_frame = ttk.Frame(ai_win)
+        button_frame.pack(fill=tk.X, padx=15, pady=(5, 10))
+        ttk.Button(button_frame, text="Close", command=ai_win.destroy).pack(side=tk.RIGHT)
+
+        ai_win.transient(self.root) # Keep on top
+        ai_win.grab_set()          # Focus this window
+        self.root.wait_window(ai_win)
+    # <<< --- END OF NEW METHOD --- >>>
 
 if __name__ == "__main__":
     root = tk.Tk()
